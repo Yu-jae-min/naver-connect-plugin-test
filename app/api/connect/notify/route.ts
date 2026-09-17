@@ -1,6 +1,6 @@
 // [PoC] Vue2(POS)에서 "화면 전환" 이벤트를 보낼 때 호출하는 엔드포인트.
 // POST /api/connect/notify
-import { broadcastDisplayChanged } from "@/lib/sseHub";
+import { broadcast } from "@/lib/sseHub";
 
 function withCors(response: Response): Response {
   response.headers.set("Access-Control-Allow-Origin", "*");
@@ -16,7 +16,10 @@ export async function OPTIONS() {
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
 
-  const event = broadcastDisplayChanged(body?.message ?? "결제가 시작되었습니다.");
+  broadcast("display.changed", {
+    message: body?.message ?? "결제가 시작되었습니다.",
+    receivedAt: new Date().toISOString(),
+  });
 
-  return withCors(Response.json({ ok: true, event }));
+  return withCors(Response.json({ ok: true }));
 }
