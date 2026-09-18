@@ -20,6 +20,10 @@ const docGroups: DocGroup[] = [
     date: "2026-09-18",
     items: [
       { href: "/docs/sse-flow.html", label: "SSE 연동 흐름 (Vue2 ↔ Next.js)" },
+      {
+        href: "/docs/sse-code-walkthrough.html",
+        label: "SSE 연동 흐름 상세 (Vue2 ↔ Next.js)",
+      },
     ],
   },
 ];
