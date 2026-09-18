@@ -5,9 +5,10 @@ import styles from "./page.module.css";
 
 export default function Home() {
   const [connected, setConnected] = useState(false);
-  const [event, setEvent] = useState<{ message: string; receivedAt: string } | null>(
-    null
-  );
+  const [event, setEvent] = useState<{
+    message: string;
+    receivedAt: string;
+  } | null>(null);
 
   useEffect(() => {
     const source = new EventSource("/api/connect/events");

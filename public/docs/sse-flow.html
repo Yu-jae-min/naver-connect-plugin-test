@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>Vue2 ↔ Next.js SSE 연동 흐름 (PoC)</title>
+<style>
+  :root {
+    --lane-vue: #42b883;
+    --lane-api: #0070f3;
+    --lane-hub: #f5a623;
+    --lane-client: #7c3aed;
+    --border: #d0d5dd;
+    --bg: #f8f9fb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    background: var(--bg);
+    margin: 0;
+    padding: 32px;
+    color: #1f2430;
+  }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  p.subtitle { color: #667085; margin-top: 0; margin-bottom: 28px; font-size: 14px; }
+
+  .lanes {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+  .lane-header {
+    padding: 10px 14px;
+    border-radius: 8px 8px 0 0;
+    font-weight: 700;
+    font-size: 14px;
+    color: #fff;
+    text-align: center;
+  }
+  .lane-header.vue { background: var(--lane-vue); }
+  .lane-header.api { background: var(--lane-api); }
+  .lane-header.hub { background: var(--lane-hub); }
+  .lane-header.client { background: var(--lane-client); }
+
+  .lane-sub { font-size: 11px; font-weight: 400; opacity: 0.9; display: block; margin-top: 2px; }
+
+  .diagram {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    position: relative;
+  }
+  .col {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    padding: 16px 10px;
+    min-height: 1400px;
+    position: relative;
+  }
+
+  .step {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid var(--border);
+  }
+  .step .num {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #1f2430;
+    color: #fff;
+    text-align: center;
+    line-height: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-right: 6px;
+  }
+  .step code {
+    background: rgba(0,0,0,0.06);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 11.5px;
+  }
+  .step.vue { background: #eafbf3; border-color: var(--lane-vue); }
+  .step.api { background: #eaf3ff; border-color: var(--lane-api); }
+  .step.hub { background: #fff6e8; border-color: var(--lane-hub); }
+  .step.client { background: #f3edff; border-color: var(--lane-client); }
+
+  .step.dim { opacity: 0.55; font-style: italic; }
+
+  /* horizontal arrow connectors spanning across columns */
+  .arrow-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 0;
+  }
+  .arrow {
+    position: absolute;
+    top: 0;
+    height: 2px;
+    background: repeating-linear-gradient(to right, #667085 0, #667085 6px, transparent 6px, transparent 10px);
+  }
+  .arrow::after {
+    content: "";
+    position: absolute;
+    right: -1px;
+    top: -4px;
+    border: 5px solid transparent;
+    border-left-color: #667085;
+  }
+  .arrow.reverse::after {
+    right: auto;
+    left: -1px;
+    border-left-color: transparent;
+    border-right-color: #667085;
+  }
+  .arrow-label {
+    position: absolute;
+    top: -20px;
+    font-size: 11px;
+    color: #475467;
+    white-space: nowrap;
+    background: var(--bg);
+    padding: 0 4px;
+  }
+
+  .legend {
+    margin-top: 24px;
+    font-size: 12px;
+    color: #475467;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .legend span.dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+
+  .note {
+    margin-top: 28px;
+    padding: 14px 16px;
+    background: #fff8e1;
+    border: 1px solid #f0c36d;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .note h3 { margin: 0 0 6px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>Vue2(POS) → Next.js 화면 전환 SSE 연동 흐름</h1>
+<p class="subtitle">기능 검증(PoC) 단계 · 현재 구현 기준 (SSE Test #1) · 로컬 next dev 단일 프로세스 전제</p>
+
+<div class="lanes">
+  <div class="lane-header vue">Vue2 (POS)<span class="lane-sub">NpayConnectSseTest.vue</span></div>
+  <div class="lane-header api">Next.js API Route<span class="lane-sub">/api/connect/notify, /events</span></div>
+  <div class="lane-header hub">sseHub (서버 메모리)<span class="lane-sub">lib/sseHub.ts</span></div>
+  <div class="lane-header client">Next.js 브라우저 화면<span class="lane-sub">app/page.tsx</span></div>
+</div>
+
+<div class="diagram">
+  <div class="col" id="col-vue"></div>
+  <div class="col" id="col-api"></div>
+  <div class="col" id="col-hub"></div>
+  <div class="col" id="col-client"></div>
+</div>
+
+<!-- Steps are laid out with fixed top offsets so arrows can align between columns -->
+<script>
+  const steps = [
+    // { lane: 'vue'|'api'|'hub'|'client', top, html }
+    { lane: 'client', top: 20, html: '<span class="num">1</span>페이지 로드 시 <code>new EventSource("/api/connect/events")</code> 로 연결 시작' },
+    { lane: 'api', top: 90, html: '<span class="num">2</span><code>GET /api/connect/events</code> 요청 수신 · <code>ReadableStream</code> 오픈' },
+    { lane: 'hub', top: 160, html: '<span class="num">3</span><code>addClient(send)</code> 호출 → 이 커넥션의 <code>send</code> 콜백을 <code>Map</code>에 등록 (globalThis에 보관, 핫리로드에도 유지)' },
+    { lane: 'api', top: 260, html: '<span class="num">4</span>등록 즉시 <code>event: stream.ready</code> 1회 전송 (접속 확인용)' },
+    { lane: 'client', top: 330, html: '<span class="num">5</span><code>source.onopen</code> 발생 → 화면에 "SSE 연결됨" 표시. 아직 전환 이벤트 없음 → <b>대기 화면</b> 유지' },
+
+    { lane: 'vue', top: 460, html: '<span class="num">6</span>사용자가 버튼 클릭 → <code>axios.post(NEXT_APP_ORIGIN + "/api/connect/notify", { message })</code>' },
+    { lane: 'api', top: 530, html: '<span class="num">7</span><code>POST /api/connect/notify</code> 수신 · body의 <code>message</code> 파싱' },
+    { lane: 'hub', top: 600, html: '<span class="num">8</span><code>broadcast("display.changed", { message, receivedAt })</code> 호출' },
+    { lane: 'hub', top: 670, html: '<span class="num">9</span>등록된 모든 클라이언트의 <code>send()</code>를 순회 실행 → SSE 포맷 문자열 생성<br><code>event: display.changed\\ndata: {...}\\n\\n</code>' },
+    { lane: 'api', top: 780, html: '<span class="num">10</span>열려있던 <code>ReadableStream</code>의 <code>controller.enqueue()</code>로 실제 바이트 전송 (커넥션은 계속 열린 상태)' },
+    { lane: 'client', top: 850, html: '<span class="num">11</span>브라우저 <code>EventSource</code>가 <code>display.changed</code> 이벤트 수신 → <code>addEventListener</code> 콜백 실행' },
+    { lane: 'client', top: 920, html: '<span class="num">12</span><code>setEvent(JSON.parse(e.data))</code> → React state 갱신 → <b>"결제 화면으로 전환됨"</b> UI로 리렌더' },
+    { lane: 'api', top: 1000, html: '<span class="num">13</span><code>POST</code> 응답으로 <code>{ ok: true }</code> 반환 (CORS 헤더 포함)' },
+    { lane: 'vue', top: 1070, html: '<span class="num">14</span>Vue2에서 응답 수신 → "이벤트 전송 완료" 메시지 표시' },
+
+    { lane: 'client', top: 1180, html: '<span class="num">15</span>탭 종료/네트워크 문제 등으로 연결 끊기면 <code>source.onerror</code> → "연결 안됨" 표시', extra: 'dim' },
+    { lane: 'api', top: 1250, html: '<span class="num">16</span>스트림 <code>cancel()</code> 콜백 실행', extra: 'dim' },
+    { lane: 'hub', top: 1320, html: '<span class="num">17</span><code>removeClient(id)</code> → Map에서 제거. 브라우저 <code>EventSource</code> 기본 재연결 로직에 의존 (자동 재시도)', extra: 'dim' },
+  ];
+
+  const laneToCol = { vue: 'col-vue', api: 'col-api', hub: 'col-hub', client: 'col-client' };
+
+  for (const s of steps) {
+    const col = document.getElementById(laneToCol[s.lane]);
+    const div = document.createElement('div');
+    div.className = 'step ' + s.lane + (s.extra ? ' ' + s.extra : '');
+    div.style.top = s.top + 'px';
+    div.innerHTML = s.html;
+    col.appendChild(div);
+  }
+</script>
+
+<div class="legend">
+  <div><span class="dot" style="background:#42b883"></span>Vue2 (POS 클라이언트)</div>
+  <div><span class="dot" style="background:#0070f3"></span>Next.js API Route</div>
+  <div><span class="dot" style="background:#f5a623"></span>sseHub (서버 메모리 상태)</div>
+  <div><span class="dot" style="background:#7c3aed"></span>Next.js 브라우저 화면</div>
+</div>
+
+<div class="note">
+  <h3>참고 · 현재 구현의 전제와 한계</h3>
+  <ul>
+    <li><b>연결 유지 방식</b>: 하나의 HTTP 응답을 <code>ReadableStream</code>으로 열어두고 계속 write(<code>enqueue</code>)하는 표준 SSE 방식. 클라이언트→서버는 별도의 <code>POST /api/connect/notify</code> 요청(9단계와 무관한 채널)으로 트리거.</li>
+    <li><b>서버 상태 저장 위치</b>: <code>lib/sseHub.ts</code>의 클라이언트 목록은 <code>globalThis</code>에 저장 — 로컬 <code>next dev</code> 단일 프로세스에서는 핫리로드에도 유지되지만, <b>Vercel 서버리스 환경에서는 인스턴스별로 분리되어 있어 그대로 동작하지 않음</b> (다른 인스턴스가 처리한 POST를 SSE 커넥션을 들고 있는 인스턴스가 못 볼 수 있음).</li>
+    <li><b>재연결/누락 이벤트 처리</b>: 현재 구현은 브라우저 <code>EventSource</code>의 기본 자동 재연결에만 의존하며, 연결이 끊긴 동안 발생한 이벤트를 다시 따라잡는 별도 로직은 없음 (이전 시도에서 revision 기반 catch-up을 추가했다가 최초 진입 시 과거 이벤트가 즉시 노출되는 버그가 발생해 되돌림).</li>
+    <li><b>CORS</b>: <code>/api/connect/notify</code>는 <code>OPTIONS</code> 핸들러 + 모든 응답에 <code>Access-Control-Allow-Origin: *</code> 헤더를 명시적으로 부착해 크로스 오리진 호출을 허용.</li>
+  </ul>
+</div>
+
+</body>
+</html>

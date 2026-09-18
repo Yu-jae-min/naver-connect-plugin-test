@@ -1,0 +1,56 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 16px 32px;
+  border-bottom: 1px solid #ebebeb;
+  background: #fff;
+}
+
+.brand {
+  font-size: 15px;
+  font-weight: 600;
+  color: #000;
+}
+
+.nav {
+  display: flex;
+  gap: 8px;
+}
+
+.navLink {
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  padding: 8px 16px;
+  border-radius: 128px;
+  transition: 0.2s;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .navLink:hover {
+    background: #f2f2f2;
+    color: #000;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .header {
+    background: #000;
+    border-bottom-color: #1a1a1a;
+  }
+
+  .brand {
+    color: #ededed;
+  }
+
+  .navLink {
+    color: #999;
+  }
+
+  .navLink:hover {
+    background: #1a1a1a;
+    color: #ededed;
+  }
+}
