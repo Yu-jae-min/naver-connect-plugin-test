@@ -5,6 +5,7 @@ import styles from "./page.module.css";
 
 export default function Home() {
   const [connected, setConnected] = useState(false);
+  const [connecting, setConnecting] = useState(true);
   const [event, setEvent] = useState<{
     message: string;
     receivedAt: string;
@@ -13,8 +14,14 @@ export default function Home() {
   useEffect(() => {
     const source = new EventSource("/api/connect/events");
 
-    source.onopen = () => setConnected(true);
-    source.onerror = () => setConnected(false);
+    source.onopen = () => {
+      setConnected(true);
+      setConnecting(false);
+    };
+    source.onerror = () => {
+      setConnected(false);
+      setConnecting(false);
+    };
 
     source.addEventListener("display.changed", (e: MessageEvent) => {
       setEvent(JSON.parse(e.data));
@@ -26,7 +33,12 @@ export default function Home() {
   return (
     <div className={styles.page}>
       <main className={styles.main}>
-        {event ? (
+        {connecting ? (
+          <div className={styles.intro}>
+            <span className={styles.spinner} aria-label="연결 중" />
+            <p>SSE 연결 중...</p>
+          </div>
+        ) : event ? (
           <div className={styles.intro}>
             <h1>결제 화면으로 전환됨</h1>
             <p>{event.message}</p>
