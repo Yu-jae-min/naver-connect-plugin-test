@@ -74,20 +74,43 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 40px;
+  min-height: 40px;
   padding: 0 16px;
   border-radius: 128px;
   border: 1px solid transparent;
   transition: 0.2s;
+  white-space: nowrap;
   cursor: pointer;
   width: fit-content;
   font-weight: 500;
+}
+
+.docsCtas {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.docsCtas a {
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
 }
 
 a.primary {
   background: var(--text-primary);
   color: var(--background);
   gap: 8px;
+}
+
+.docsCtas a.legacyDoc {
+  background: #b42318;
+  color: #fff;
+  text-decoration: line-through;
+}
+
+.docsCtas a.latestDoc {
+  background: #155eef;
+  color: #fff;
 }
 
 a.secondary {
@@ -99,6 +122,14 @@ a.secondary {
   a.primary:hover {
     background: var(--button-primary-hover);
     border-color: transparent;
+  }
+
+  .docsCtas a.legacyDoc:hover {
+    background: #912018;
+  }
+
+  .docsCtas a.latestDoc:hover {
+    background: #004eeb;
   }
 
   a.secondary:hover {

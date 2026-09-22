@@ -8,6 +8,7 @@ import styles from "../page.module.css";
 type DocItem = {
   href: string;
   label: string;
+  isLatest?: boolean;
 };
 
 type DocGroup = {
@@ -37,6 +38,16 @@ const docGroups: DocGroup[] = [
         href: "/docs/merchant-sse-at-a-glance.html",
         label: "단말 3대 연결 예시",
       },
+      {
+        href: "/docs/realtime-delivery-options.html",
+        label: "대규모 단말 실시간 전달 방식 비교",
+        isLatest: true,
+      },
+      {
+        href: "/docs/aws-realtime-architecture-decision.html",
+        label: "AWS 단말 상시 연결 아키텍처 비교",
+        isLatest: true,
+      },
     ],
   },
 ];
@@ -53,13 +64,17 @@ export default function DocsPage() {
           <h1>참고 문서</h1>
         </div>
         {sortedGroups.map((group) => (
-          <div key={group.date} className={styles.intro} style={{ gap: 12 }}>
+          <div
+            key={group.date}
+            className={styles.intro}
+            style={{ gap: 12, width: "100%" }}
+          >
             <h2 className={styles.groupTitle}>{group.date}</h2>
-            <div className={styles.ctas}>
+            <div className={`${styles.ctas} ${styles.docsCtas}`}>
               {group.items.map((item) => (
                 <a
                   key={item.href}
-                  className={styles.primary}
+                  className={`${styles.primary} ${item.isLatest ? styles.latestDoc : styles.legacyDoc}`}
                   href={item.href}
                   target="_blank"
                   rel="noreferrer"
