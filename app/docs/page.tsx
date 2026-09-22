@@ -19,10 +19,23 @@ const docGroups: DocGroup[] = [
   {
     date: "2026-09-18",
     items: [
-      { href: "/docs/sse-flow.html", label: "SSE 연동 흐름 (Vue2 ↔ Next.js)" },
+      { href: "/docs/sse-flow.html", label: "N:N SSE 연동 흐름" },
       {
         href: "/docs/sse-code-walkthrough.html",
-        label: "SSE 연동 흐름 상세 (Vue2 ↔ Next.js)",
+        label: "N:N SSE 연동 흐름 상세",
+      },
+    ],
+  },
+  {
+    date: "2026-09-22",
+    items: [
+      {
+        href: "/docs/merchant-device-sse-flow.html",
+        label: "1:N SSE 연동 흐름",
+      },
+      {
+        href: "/docs/merchant-sse-at-a-glance.html",
+        label: "단말 3대 연결 예시",
       },
     ],
   },

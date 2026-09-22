@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>단말 3대 연결 예시</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #172033;
+        --muted: #536174;
+        --line: #d8e2ee;
+        --bg: #f4f7fb;
+        --blue: #235ba8;
+        --purple: #6946a3;
+        --green: #137357;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          16px/1.6 system-ui,
+          -apple-system,
+          "Apple SD Gothic Neo",
+          sans-serif;
+      }
+      main {
+        max-width: 1240px;
+        margin: auto;
+        padding: 32px 22px 48px;
+      }
+      h1 {
+        font-size: 32px;
+        line-height: 1.25;
+        margin: 0 0 8px;
+      }
+      p {
+        margin: 0;
+      }
+      .lead {
+        color: var(--muted);
+        margin-bottom: 22px;
+      }
+      .diagram {
+        margin: 0;
+        padding: 12px;
+        background: white;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        overflow-x: auto;
+        box-shadow: 0 12px 34px #1733570b;
+      }
+      svg {
+        display: block;
+        width: 100%;
+        min-width: 900px;
+        height: auto;
+        font-family:
+          system-ui,
+          -apple-system,
+          "Apple SD Gothic Neo",
+          sans-serif;
+      }
+      .caption {
+        padding: 4px 8px 8px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin: 18px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .steps li {
+        background: white;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 15px;
+      }
+      .steps strong {
+        display: block;
+        margin-bottom: 6px;
+      }
+      .num {
+        display: inline-grid;
+        place-items: center;
+        width: 25px;
+        height: 25px;
+        margin-right: 6px;
+        border-radius: 50%;
+        background: #243b5b;
+        color: white;
+        font-size: 13px;
+      }
+      code {
+        font:
+          0.92em ui-monospace,
+          SFMono-Regular,
+          Consolas,
+          monospace;
+        background: #edf2f8;
+        border-radius: 4px;
+        padding: 2px 4px;
+      }
+      .summary {
+        margin-top: 18px;
+        padding: 15px 18px;
+        background: #eaf4ef;
+        border-left: 4px solid var(--green);
+        border-radius: 8px;
+      }
+      @media (max-width: 850px) {
+        main {
+          padding: 24px 12px 36px;
+        }
+        h1 {
+          font-size: 26px;
+        }
+        .steps {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 560px) {
+        .steps {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>단말 3대 연결 예시</h1>
+      <p class="lead">
+        한 사업자의 단말 3대가 연결된 예시입니다. Vue2 데스크톱 브라우저는 SSE에
+        연결하지 않고 별도의 POST를 보냅니다.
+      </p>
+
+      <figure class="diagram">
+        <svg
+          viewBox="0 0 1180 640"
+          role="img"
+          aria-labelledby="diagram-title diagram-desc"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <title id="diagram-title">
+            Vue2 데스크톱 브라우저, Next.js 서버, 단말 브라우저 3대 사이의 SSE
+            흐름
+          </title>
+          <desc id="diagram-desc">
+            각 단말이 EventSource GET 요청으로 Next.js 서버에 연결한다. 서버는
+            사업자별 clients 목록에 각 연결의 send 함수를 등록한다. Vue2
+            브라우저가 토큰과 메시지를 POST하면 서버는 사업자 코드를 확인하고 세
+            send 함수를 호출해 기존 SSE 응답 3개로 메시지를 보낸다.
+          </desc>
+          <defs>
+            <marker
+              id="arrow-blue"
+              markerWidth="9"
+              markerHeight="9"
+              refX="8"
+              refY="4.5"
+              orient="auto"
+            >
+              <path d="M0 0 L9 4.5 L0 9 Z" fill="#235ba8" />
+            </marker>
+            <marker
+              id="arrow-purple"
+              markerWidth="9"
+              markerHeight="9"
+              refX="8"
+              refY="4.5"
+              orient="auto"
+            >
+              <path d="M0 0 L9 4.5 L0 9 Z" fill="#6946a3" />
+            </marker>
+            <marker
+              id="arrow-green"
+              markerWidth="9"
+              markerHeight="9"
+              refX="8"
+              refY="4.5"
+              orient="auto"
+            >
+              <path d="M0 0 L9 4.5 L0 9 Z" fill="#137357" />
+            </marker>
+          </defs>
+
+          <!-- Vue2 데스크톱 브라우저 -->
+          <rect
+            x="24"
+            y="140"
+            width="260"
+            height="210"
+            rx="16"
+            fill="#edf5ff"
+            stroke="#b8d0ef"
+            stroke-width="2"
+          />
+          <rect
+            x="105"
+            y="163"
+            width="98"
+            height="64"
+            rx="7"
+            fill="white"
+            stroke="#235ba8"
+            stroke-width="3"
+          />
+          <line
+            x1="112"
+            y1="235"
+            x2="196"
+            y2="235"
+            stroke="#235ba8"
+            stroke-width="4"
+            stroke-linecap="round"
+          />
+          <text
+            x="154"
+            y="201"
+            text-anchor="middle"
+            font-size="16"
+            font-weight="700"
+            fill="#235ba8"
+          >
+            Vue2
+          </text>
+          <text
+            x="154"
+            y="278"
+            text-anchor="middle"
+            font-size="19"
+            font-weight="700"
+            fill="#172033"
+          >
+            Vue2 데스크톱 브라우저
+          </text>
+          <text
+            x="154"
+            y="309"
+            text-anchor="middle"
+            font-size="15"
+            fill="#536174"
+          >
+            토큰 + 메시지 전송
+          </text>
+          <text
+            x="154"
+            y="331"
+            text-anchor="middle"
+            font-size="13"
+            fill="#536174"
+          >
+            SSE 연결은 열지 않음
+          </text>
+
+          <!-- Next.js 서버와 사업자 채널 -->
+          <rect
+            x="406"
+            y="44"
+            width="376"
+            height="552"
+            rx="18"
+            fill="#f8fafc"
+            stroke="#a9bdd5"
+            stroke-width="2"
+          />
+          <text
+            x="594"
+            y="85"
+            text-anchor="middle"
+            font-size="23"
+            font-weight="700"
+            fill="#172033"
+          >
+            Next.js 서버
+          </text>
+          <text
+            x="594"
+            y="110"
+            text-anchor="middle"
+            font-size="14"
+            fill="#536174"
+          >
+            단말 GET과 Vue2 POST를 각각 처리
+          </text>
+          <rect
+            x="430"
+            y="145"
+            width="328"
+            height="80"
+            rx="11"
+            fill="#edf5ff"
+            stroke="#b8d0ef"
+          />
+          <text
+            x="594"
+            y="178"
+            text-anchor="middle"
+            font-size="17"
+            font-weight="700"
+            fill="#235ba8"
+          >
+            POST /api/connect/notify
+          </text>
+          <text
+            x="594"
+            y="204"
+            text-anchor="middle"
+            font-size="14"
+            fill="#536174"
+          >
+            토큰 → 사업자 코드 확인
+          </text>
+          <path
+            d="M594 226 V264"
+            fill="none"
+            stroke="#235ba8"
+            stroke-width="3"
+            marker-end="url(#arrow-blue)"
+          />
+          <rect
+            x="430"
+            y="277"
+            width="328"
+            height="278"
+            rx="12"
+            fill="#f0f8f4"
+            stroke="#b7dcca"
+            stroke-width="2"
+          />
+          <text
+            x="594"
+            y="313"
+            text-anchor="middle"
+            font-size="18"
+            font-weight="700"
+            fill="#137357"
+          >
+            해당 사업자의 clients 목록
+          </text>
+          <text
+            x="594"
+            y="337"
+            text-anchor="middle"
+            font-size="13"
+            fill="#536174"
+          >
+            ② 연결마다 전용 send()를 이 목록에 등록
+          </text>
+          <rect
+            x="452"
+            y="354"
+            width="284"
+            height="47"
+            rx="8"
+            fill="white"
+            stroke="#b7dcca"
+          />
+          <text
+            x="594"
+            y="384"
+            text-anchor="middle"
+            font-size="16"
+            fill="#172033"
+          >
+            연결 1 전용 send()
+          </text>
+          <rect
+            x="452"
+            y="415"
+            width="284"
+            height="47"
+            rx="8"
+            fill="white"
+            stroke="#b7dcca"
+          />
+          <text
+            x="594"
+            y="445"
+            text-anchor="middle"
+            font-size="16"
+            fill="#172033"
+          >
+            연결 2 전용 send()
+          </text>
+          <rect
+            x="452"
+            y="476"
+            width="284"
+            height="47"
+            rx="8"
+            fill="white"
+            stroke="#b7dcca"
+          />
+          <text
+            x="594"
+            y="506"
+            text-anchor="middle"
+            font-size="16"
+            fill="#172033"
+          >
+            연결 3 전용 send()
+          </text>
+          <text
+            x="594"
+            y="579"
+            text-anchor="middle"
+            font-size="13"
+            fill="#536174"
+          >
+            각 send()가 자기 연결의 열린 응답에 쓰기
+          </text>
+
+          <!-- 단말 3대 -->
+          <g fill="#f6f1ff" stroke="#cbb9ea" stroke-width="2">
+            <rect x="948" y="65" width="208" height="140" rx="15" />
+            <rect x="948" y="250" width="208" height="140" rx="15" />
+            <rect x="948" y="435" width="208" height="140" rx="15" />
+          </g>
+          <g fill="white" stroke="#6946a3" stroke-width="3">
+            <rect x="1022" y="80" width="60" height="70" rx="7" />
+            <rect x="1022" y="265" width="60" height="70" rx="7" />
+            <rect x="1022" y="450" width="60" height="70" rx="7" />
+          </g>
+          <g fill="#6946a3">
+            <circle cx="1052" cy="141" r="3" />
+            <circle cx="1052" cy="326" r="3" />
+            <circle cx="1052" cy="511" r="3" />
+          </g>
+          <g
+            text-anchor="middle"
+            fill="#172033"
+            font-size="17"
+            font-weight="700"
+          >
+            <text x="1052" y="177">Next.js 단말기 1</text>
+            <text x="1052" y="362">Next.js 단말기 2</text>
+            <text x="1052" y="547">Next.js 단말기 3</text>
+          </g>
+
+          <!-- 요청 방향: 단말 → 서버, Vue2 → 서버 -->
+          <path
+            d="M947 107 H792"
+            fill="none"
+            stroke="#6946a3"
+            stroke-width="3"
+            marker-end="url(#arrow-purple)"
+          />
+          <path
+            d="M947 292 H792"
+            fill="none"
+            stroke="#6946a3"
+            stroke-width="3"
+            marker-end="url(#arrow-purple)"
+          />
+          <path
+            d="M947 477 H792"
+            fill="none"
+            stroke="#6946a3"
+            stroke-width="3"
+            marker-end="url(#arrow-purple)"
+          />
+          <g
+            text-anchor="middle"
+            fill="#6946a3"
+            font-size="13"
+            font-weight="700"
+          >
+            <text x="870" y="96">① EventSource GET</text>
+            <text x="870" y="281">① EventSource GET</text>
+            <text x="870" y="466">① EventSource GET</text>
+          </g>
+          <path
+            d="M285 184 H394"
+            fill="none"
+            stroke="#235ba8"
+            stroke-width="4"
+            marker-end="url(#arrow-blue)"
+          />
+          <text
+            x="340"
+            y="156"
+            text-anchor="middle"
+            font-size="14"
+            font-weight="700"
+            fill="#235ba8"
+          >
+            ③ POST
+          </text>
+          <text
+            x="340"
+            y="229"
+            text-anchor="middle"
+            font-size="12"
+            fill="#536174"
+          >
+            토큰 + 메시지
+          </text>
+
+          <!-- 응답 방향: 서버 → 단말, 앞서 열린 GET 응답 사용 -->
+          <path
+            d="M792 168 H939"
+            fill="none"
+            stroke="#137357"
+            stroke-width="4"
+            marker-end="url(#arrow-green)"
+          />
+          <path
+            d="M792 353 H939"
+            fill="none"
+            stroke="#137357"
+            stroke-width="4"
+            marker-end="url(#arrow-green)"
+          />
+          <path
+            d="M792 538 H939"
+            fill="none"
+            stroke="#137357"
+            stroke-width="4"
+            marker-end="url(#arrow-green)"
+          />
+          <g
+            text-anchor="middle"
+            fill="#137357"
+            font-size="13"
+            font-weight="700"
+          >
+            <text x="869" y="159">④ 열린 SSE 응답</text>
+            <text x="869" y="344">④ 열린 SSE 응답</text>
+            <text x="869" y="529">④ 열린 SSE 응답</text>
+          </g>
+        </svg>
+        <figcaption class="caption">
+          보라색은 단말의 GET 요청, 파란색은 Vue2의 POST 요청, 초록색은 이미
+          열린 GET 응답을 통한 SSE 메시지입니다.
+        </figcaption>
+      </figure>
+
+      <ol class="steps">
+        <li>
+          <strong><span class="num">1</span>단말이 연결</strong>Next.js 단말기
+          브라우저 3대가 각각 <code>EventSource</code>로 GET 요청을 보냅니다.
+          Next.js 서버는 응답 3개를 끝내지 않고 열어 둡니다.
+        </li>
+        <li>
+          <strong><span class="num">2</span>연결 등록</strong>Next.js 서버는 각
+          SSE 연결 전용 <code>send()</code>를 만들고, 해당 사업자의
+          <code>clients</code> 목록에 등록합니다.
+        </li>
+        <li>
+          <strong><span class="num">3</span>Vue2가 알림</strong>Vue2 데스크톱
+          브라우저가 토큰과 메시지를 POST합니다. Next.js 서버는 토큰으로 사업자
+          코드를 확인합니다.
+        </li>
+        <li>
+          <strong><span class="num">4</span>단말에 전달</strong>Next.js 서버는
+          해당 사업자의 <code>send()</code> 3개를 호출해 각 단말의 열린 SSE
+          응답에 메시지를 씁니다.
+        </li>
+      </ol>
+      <p class="summary">
+        <strong>핵심:</strong> 단말 3대 = 열린 SSE 연결 3개 = 연결 전용
+        <code>send()</code> 3개. <code>clients</code>는 Next.js 서버가
+        사업자별로 보관하는 전송 함수 목록입니다.
+      </p>
+    </main>
+  </body>
+</html>

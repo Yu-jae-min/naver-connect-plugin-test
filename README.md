@@ -1,5 +1,33 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Merchant-scoped SSE PoC
+
+The device WebView reads `window.npayContext.deviceSerialNo`. The server maps
+that value to a merchant and registers the SSE connection in that merchant's
+channel. The built-in test values are:
+
+- device serial: `deviceSerialNoMockData`
+- merchant code: `merchantCodeMockData`
+- bearer token: `test-merchant-token-001`
+
+The PoC resolves these values through asynchronous mock APIs:
+
+- `GET /api/mock/admin/devices?deviceSerialNo=...`
+- `GET /api/mock/session/me` with the Vue2 Authorization header
+
+The Vue2 test client sends a notification using the bearer token. A
+`merchantCode` supplied in the request body is ignored.
+
+```bash
+curl -X POST http://localhost:3000/api/connect/notify \
+  -H 'Authorization: Bearer test-merchant-token-001' \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"결제가 시작되었습니다."}'
+```
+
+These mock APIs are for PoC only. Production should replace their URLs with the
+admin device API and the real login/session verification API.
+
 ## Getting Started
 
 First, run the development server:
