@@ -1,268 +1,128 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { events } from "aws-amplify/data";
+import {
+  configureAppSyncEvents,
+  getAppSyncConfigurationError,
+} from "@/lib/appSyncEvents";
 import styles from "./page.module.css";
 
-// SSE 연결 상태를 하나의 값으로 표현.
-// connected/connecting 두 boolean으로 나누면 "연결 실패(error)"와
-// "아직 연결 시도 전(connecting)" 상태가 둘 다 connected=false로 겹쳐서
-// 구분이 안 되는 문제가 있었음 (에러 발생 시에도 스피너가 계속 노출됨).
-type ConnectionStatus =
-  | "identifying"
-  | "connecting"
-  | "connected"
-  | "error"
-  | "device-error";
+type ConnectionStatus = "connecting" | "connected" | "error";
+type Screen = "WAITING" | "MAIN";
+type DisplayEvent = { type?: string; message?: string };
 
-declare global {
-  interface Window {
-    npayContext?: {
-      deviceSerialNo?: string;
-    };
-  }
+const CHANNEL = process.env.NEXT_PUBLIC_APPSYNC_CHANNEL ?? "/default/test";
+const CONFIGURATION_ERROR = getAppSyncConfigurationError();
+
+function getDisplayEvent(data: unknown): DisplayEvent | null {
+  if (!data || typeof data !== "object") return null;
+
+  // Amplify Events는 payload 자체를 전달한다. event wrapper를 반환하는 버전도 함께 허용한다.
+  const value = "event" in data ? (data as { event: unknown }).event : data;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as DisplayEvent;
 }
 
-type ConnectEvent = {
-  revision: number;
-  message: string;
-  receivedAt: string;
-};
-
-// 서버(app/api/connect/events/route.ts)가 15초 주기로 heartbeat를 보낸다.
-// 이 값의 3배 이상 아무 신호(heartbeat/이벤트)도 없으면, 단말기 화면 on/off나
-// 웹뷰 백그라운드 전환 등으로 연결이 조용히 끊긴 것으로 보고 강제 재연결한다.
-// EventSource.readyState는 이런 상황에서도 계속 OPEN으로 남아있을 수 있어
-// onerror만으로는 감지되지 않는다.
-const STALE_CONNECTION_MS = 45000;
-const WATCHDOG_INTERVAL_MS = 10000;
-
 export default function Home() {
-  const [status, setStatus] = useState<ConnectionStatus>("identifying");
-  const [event, setEvent] = useState<ConnectEvent | null>(null);
-  const [deviceError, setDeviceError] = useState("");
-
-  const revisionRef = useRef(0);
-  // 이 페이지 세션에서 EventSource가 "처음" 연결된 것인지 구분한다.
-  // 최초 연결 때는 같은 merchant 채널에 남아있는 과거 이벤트(이전 단말 세션에서 온 것)를
-  // 화면에 띄우면 안 되고, 리비전 기준선만 맞춰야 한다. 재연결 때만 그 사이
-  // 놓친 이벤트를 따라잡는다(catch-up).
-  const hasConnectedOnceRef = useRef(false);
-  const lastActivityAtRef = useRef<number>(0);
-  const sourceRef = useRef<EventSource | null>(null);
-
-  const applyEvent = useCallback((next: ConnectEvent) => {
-    if (next.revision <= revisionRef.current) return; // 이미 처리한 이벤트는 무시
-    revisionRef.current = next.revision;
-    setEvent(next);
-  }, []);
-
-  // 최초 연결 시: 화면에는 표시하지 않고 현재 리비전만 기준선으로 맞춘다.
-  const syncBaseline = useCallback(async (deviceSerialNo: string) => {
-    try {
-      const params = new URLSearchParams({ deviceSerialNo });
-      const res = await fetch(`/api/connect/state?${params}`, {
-        cache: "no-store",
-      });
-      if (!res.ok) return;
-      const state = await res.json();
-      if (
-        typeof state.revision === "number" &&
-        state.revision > revisionRef.current
-      ) {
-        revisionRef.current = state.revision;
-      }
-    } catch {
-      // 실패해도 기준선은 유지되며, 이후 정상 이벤트는 그대로 반영된다.
-    }
-  }, []);
-
-  // SSE가 끊겨 있던 사이 놓친 최신 화면 이벤트 1건을 조회해 현재 화면 상태를 따라잡는다.
-  // 서버가 이력을 보관하지 않으므로 중간 이벤트 여러 건을 순서대로 재생하지는 않는다.
-  const catchUp = useCallback(
-    async (deviceSerialNo: string) => {
-      try {
-        const params = new URLSearchParams({ deviceSerialNo });
-        const res = await fetch(`/api/connect/state?${params}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) return;
-        const state = await res.json();
-        if (state.lastEvent) applyEvent(state.lastEvent);
-      } catch {
-        // 네트워크 오류는 무시하고 다음 재연결/재조회 때 다시 시도한다.
-      }
-    },
-    [applyEvent],
+  const [status, setStatus] = useState<ConnectionStatus>(
+    CONFIGURATION_ERROR ? "error" : "connecting",
   );
+  const [screen, setScreen] = useState<Screen>("WAITING");
+  const [message, setMessage] = useState(CONFIGURATION_ERROR);
 
   useEffect(() => {
-    // PoC에서는 고정값을 사용하며, 실제 단말에서는 WebView가 주입한 시리얼로 소속을 확인한다.
-    // const deviceSerialNo = window.npayContext?.deviceSerialNo?.trim();
-    const deviceSerialNo = "deviceSerialNoMockData";
-
-    if (!deviceSerialNo) {
-      const deviceErrorTimer = window.setTimeout(() => {
-        setDeviceError(
-          "단말기 정보를 확인할 수 없습니다. 신뢰된 단말기 WebView에서 접속해 주세요.",
-        );
-        setStatus("device-error");
-      }, 0);
-      return () => window.clearTimeout(deviceErrorTimer);
-    }
+    if (CONFIGURATION_ERROR) return;
 
     let disposed = false;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let watchdogTimer: ReturnType<typeof setInterval> | null = null;
+    let channel: Awaited<ReturnType<typeof events.connect>> | undefined;
+    let subscription: ReturnType<
+      Awaited<ReturnType<typeof events.connect>>["subscribe"]
+    >;
 
-    const clearReconnectTimer = () => {
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-        reconnectTimer = null;
-      }
-    };
-
-    const connect = () => {
-      if (disposed) return;
-
-      // 재연결 시 이전 EventSource가 남아있다면 반드시 닫는다.
-      // 그대로 두면 중복 연결과 이벤트 리스너가 누적되어 리크로 이어진다.
-      sourceRef.current?.close();
-      clearReconnectTimer();
-      setStatus("connecting");
-
-      const params = new URLSearchParams({ deviceSerialNo });
-      const source = new EventSource(`/api/connect/events?${params}`);
-      sourceRef.current = source;
-
-      source.onopen = () => {
-        lastActivityAtRef.current = Date.now();
-        setStatus("connected");
-
-        if (!hasConnectedOnceRef.current) {
-          hasConnectedOnceRef.current = true;
-          syncBaseline(deviceSerialNo);
-        } else {
-          // 재연결 성공 시점에는 항상 최신 상태를 다시 확인한다.
-          // (연결이 끊겼던 동안 온 이벤트를 SSE만으로는 복구할 수 없기 때문)
-          catchUp(deviceSerialNo);
-        }
-      };
-
-      source.onerror = () => {
-        // 연결 실패/끊김. connecting=false, connected=false로 뭉개지 않고
-        // "error"로 명시해 화면에서 "연결 안됨"을 바로 표시할 수 있게 함.
-        setStatus("error");
-        clearReconnectTimer();
-        // 브라우저 기본 재시도에만 의존하지 않고 일정한 PoC 재시도 간격을 적용한다.
-        // 다음 connect()가 기존 EventSource를 닫으므로 연결이 중복 등록되지 않는다.
-        reconnectTimer = setTimeout(connect, 2000);
-      };
-
-      source.addEventListener("stream.ready", () => {
-        lastActivityAtRef.current = Date.now();
-      });
-
-      source.addEventListener("heartbeat", () => {
-        lastActivityAtRef.current = Date.now();
-      });
-
-      source.addEventListener("display.changed", (e: MessageEvent) => {
-        lastActivityAtRef.current = Date.now();
-        applyEvent(JSON.parse(e.data));
-      });
-    };
-
-    // 워치독: heartbeat 포함 아무 신호도 오래 없으면 "죽은 연결"로 간주하고
-    // 강제로 재연결한다. onerror에만 의존하면 소켓이 조용히 끊긴 경우를 놓친다.
-    const checkConnectionHealth = () => {
-      const idleFor = Date.now() - lastActivityAtRef.current;
-      if (idleFor > STALE_CONNECTION_MS) {
-        setStatus("error");
-        connect();
-      }
-    };
-
-    // 단말기 화면이 꺼졌다가 켜지거나 웹뷰가 백그라운드에서 돌아올 때,
-    // 워치독 주기를 기다리지 않고 즉시 연결 상태를 재확인하고 최신 상태를
-    // 다시 조회한다. 화면이 꺼져있던 동안 온 이벤트는 SSE가 살아있었더라도
-    // 브라우저/웹뷰의 백그라운드 스로틀링으로 지연 전달될 수 있기 때문이다.
-    const handleVisibility = () => {
-      if (document.visibilityState !== "visible") return;
-      checkConnectionHealth();
-      if (sourceRef.current?.readyState === EventSource.OPEN) {
-        catchUp(deviceSerialNo);
-      }
-    };
-
-    const initialize = async () => {
+    const connect = async () => {
       try {
-        // SSE 연결 전에 등록 단말인지 확인해 현재 mock API의 403 응답은 재시도하지 않는다.
-        // 그 외 오류는 일시 장애일 수 있어 아래 SSE 연결/재시도 흐름에 맡긴다.
-        const params = new URLSearchParams({ deviceSerialNo });
-        const response = await fetch(`/api/connect/state?${params}`, {
-          cache: "no-store",
-        });
-        if (disposed) return;
+        configureAppSyncEvents();
+        channel = await events.connect(CHANNEL);
 
-        if (response.status === 403) {
-          setDeviceError("어드민에 등록되지 않은 단말기입니다.");
-          setStatus("device-error");
+        if (disposed) {
+          channel.close();
           return;
         }
-      } catch {
-        // 일시적인 조회 실패는 SSE 연결/재시도 흐름에서 처리한다.
-      }
 
-      lastActivityAtRef.current = Date.now();
-      connect();
+        subscription = channel.subscribe({
+          next: (data) => {
+            const event = getDisplayEvent(data);
+            if (event?.type !== "display.changed") return;
+
+            setMessage(event.message ?? "화면 전환 이벤트를 수신했습니다.");
+            // 중복 이벤트가 와도 대기 화면에서 한 번만 메인 UI로 전환한다.
+            setScreen((current) => (current === "WAITING" ? "MAIN" : current));
+          },
+          error: (error) => {
+            console.error("AppSync Events subscription failed", error);
+            if (!disposed) {
+              setMessage("AppSync 채널 구독 중 오류가 발생했습니다.");
+              setStatus("error");
+            }
+          },
+        });
+
+        // SDK가 AppSync의 subscribe ACK를 받은 뒤에만 실제 수신 준비 완료로 표시한다.
+        await subscription.ready;
+        if (!disposed) setStatus("connected");
+      } catch (error) {
+        console.error("AppSync Events connection failed", error);
+        if (!disposed) {
+          setMessage(
+            error instanceof Error
+              ? error.message
+              : "AppSync Events 연결에 실패했습니다.",
+          );
+          setStatus("error");
+        }
+      }
     };
 
-    void initialize();
-    watchdogTimer = setInterval(checkConnectionHealth, WATCHDOG_INTERVAL_MS);
-    document.addEventListener("visibilitychange", handleVisibility);
-
+    void connect();
     return () => {
       disposed = true;
-      document.removeEventListener("visibilitychange", handleVisibility);
-      clearReconnectTimer();
-      if (watchdogTimer) clearInterval(watchdogTimer);
-      sourceRef.current?.close();
-      sourceRef.current = null;
+      subscription?.unsubscribe();
+      channel?.close();
     };
-  }, [applyEvent, catchUp, syncBaseline]);
+  }, []);
 
   return (
     <div className={styles.page}>
       <main className={styles.main}>
-        {status === "identifying" || status === "connecting" ? (
-          // 최초 연결 시도 중일 때만 스피너 노출.
-          // error 상태는 여기 걸리지 않고 아래 대기 화면 분기로 빠져
-          // "SSE 연결 상태: 연결 안됨" 문구가 보이게 됨.
-          <div className={styles.intro}>
-            <span className={styles.spinner} aria-label="연결 중" />
-            <p>SSE 연결 중...</p>
-          </div>
-        ) : status === "device-error" ? (
-          <div className={styles.intro}>
-            <h1>단말기 연결 불가</h1>
-            <p>{deviceError}</p>
-          </div>
-        ) : event ? (
-          <div className={styles.intro}>
-            <h1>결제 화면으로 전환됨</h1>
-            <p>{event.message}</p>
-            <p>수신 시각: {event.receivedAt}</p>
-          </div>
-        ) : (
-          <div className={styles.intro}>
-            <h1>대기 화면</h1>
-            <p>
-              POS(Vue2)에서 이벤트가 도착하면 이 화면이 전환됩니다.
-              <br />
-              SSE 연결 상태: {status === "connected" ? "연결됨" : "연결 안됨"}
-            </p>
-          </div>
-        )}
+        <div className={styles.intro}>
+          {screen === "MAIN" ? (
+            <>
+              <h1>메인 페이지</h1>
+              <p>{message}</p>
+            </>
+          ) : (
+            <>
+              <h1>대기 화면</h1>
+              <p>
+                AppSync 고정 채널: {CHANNEL}
+                <br />
+                구독 상태:{" "}
+                {status === "connected"
+                  ? "연결됨"
+                  : status === "connecting"
+                    ? "연결 중"
+                    : "연결 실패"}
+                {message && (
+                  <>
+                    <br />
+                    {message}
+                  </>
+                )}
+              </p>
+            </>
+          )}
+        </div>
       </main>
     </div>
   );

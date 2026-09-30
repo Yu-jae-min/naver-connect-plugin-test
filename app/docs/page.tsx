@@ -50,6 +50,16 @@ const docGroups: DocGroup[] = [
       },
     ],
   },
+  {
+    date: "2026-09-28",
+    items: [
+      {
+        href: "/docs/appsync-connectivity-poc.html",
+        label: "AppSync 실제 통신 1차 PoC",
+        isLatest: true,
+      },
+    ],
+  },
 ];
 
 const sortedGroups = [...docGroups].sort((a, b) =>
